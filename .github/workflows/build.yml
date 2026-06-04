@@ -18,35 +18,47 @@ jobs:
           chmod +x downloadFrameworks.sh
           ./downloadFrameworks.sh
 
-      - name: 3. Ядерный патч проекта (Удаляем скрипты codesign и entitlements)
+      - name: 3. Ядерный патч проекта (Удаляем подпись, расширения, скрипты и превью-ресурсы)
         run: |
+          # Физически удаляем ненужную папку с превью-ресурсами, которая вызывает сбой
+          rm -rf "CodeApp/Preview Content"
+          
           gem install xcodeproj
           cat << 'EOF' > patch.rb
           require 'xcodeproj'
           project = Xcodeproj::Project.open('Code.xcodeproj')
 
-          # 1. Удаляем расширение
+          # 1. Удаляем расширение (оно ломает сборку без подписи)
           ext = project.targets.find { |t| t.name == 'extension' }
           project.targets.delete(ext) if ext
 
+          # 2. Удаляем файлы и группы Preview Content из структуры проекта Xcode
+          project.objects.each do |obj|
+            if obj.respond_to?(:path) && obj.path && (obj.path.include?('Preview Content') || obj.path.include?('Preview Assets'))
+              obj.remove_from_project
+            end
+          end
+
           project.targets.each do |target|
-            # Очищаем зависимости
+            # Очищаем зависимости от расширения
             target.dependencies.delete_if { |dep| dep.target && dep.target.name == 'extension' }
+            
             target.copy_files_build_phases.each do |phase|
               phase.files.to_a.each do |bf|
                 phase.remove_build_file(bf) if bf.file_ref && bf.file_ref.path && bf.file_ref.path.end_with?('.appex')
               end
             end
 
-            # 2. ИЩЕМ И УДАЛЯЕМ ЛЮБЫЕ СКРИПТЫ С CODESIGN (именно они давали 2 failures)
+            # 3. Заменяем скрипты с codesign
             target.shell_script_build_phases.each do |phase|
               if phase.shell_script && phase.shell_script.include?('codesign')
                 phase.shell_script = "echo 'Codesign skipped successfully'"
               end
             end
 
-            # 3. ВЫРЕЗАЕМ ПРОВЕРКИ ПОДПИСИ И ENTITLEMENTS НА УРОВНЕ ПРОЕКТА
+            # 4. Вырезаем все проверки подписи, entitlements и пути превью-ресурсов
             target.build_configurations.each do |config|
+              config.build_settings['DEVELOPMENT_ASSET_PATHS'] = '""'
               config.build_settings.delete('CODE_SIGN_ENTITLEMENTS')
               config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
               config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
@@ -58,7 +70,7 @@ jobs:
           EOF
           ruby patch.rb
 
-      - name: 4. Сборка проекта (Теперь Xcode ничего не остановит)
+      - name: 4. Сборка проекта
         run: |
           xcodebuild clean build \
             -project "Code.xcodeproj" \
