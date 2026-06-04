@@ -1,48 +1,61 @@
-name: Build & Deploy to TestFlight
-on:
-  push:
-    branches: [main]
+name: Build CodeApp IPA
 
-concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: true
+on:
+  workflow_dispatch: # Кнопка для ручного запуска в Actions
 
 jobs:
-  deploy:
-    name: Deploying to TestFlight
-    runs-on: macOS-26
+  build:
+    runs-on: macos-latest # Запуск на сервере Mac от GitHub
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: 1. Скачиваем исходный код
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          submodules: recursive
 
-      - name: Deploy iOS Beta to TestFlight via Fastlane
-        run: fastlane beta
-        env:
-          APP_STORE_CONNECT_TEAM_ID: "${{ secrets.APP_STORE_CONNECT_TEAM_ID }}"
-          DEVELOPER_APP_ID: "${{ secrets.DEVELOPER_APP_ID }}"
-          DEVELOPER_APP_IDENTIFIER: "${{ secrets.DEVELOPER_APP_IDENTIFIER }}"
-          DEVELOPER_APP_EXTENSION_IDENTIFIER: "${{ secrets.DEVELOPER_APP_EXTENSION_IDENTIFIER }}"
-          DEVELOPER_PORTAL_TEAM_ID: "${{ secrets.DEVELOPER_PORTAL_TEAM_ID }}"
-          FASTLANE_APPLE_ID: "${{ secrets.FASTLANE_APPLE_ID }}"
-          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: "${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}"
-          MATCH_PASSWORD: "${{ secrets.MATCH_PASSWORD }}"
-          GIT_AUTHORIZATION: "${{ secrets.GIT_AUTHORIZATION }}"
-          PROVISIONING_PROFILE_SPECIFIER: "${{ secrets.PROVISIONING_PROFILE_SPECIFIER }}"
-          TEMP_KEYCHAIN_PASSWORD: "${{ secrets.TEMP_KEYCHAIN_PASSWORD }}"
-          TEMP_KEYCHAIN_USER: "${{ secrets.TEMP_KEYCHAIN_USER }}"
-          APPLE_KEY_ID: "${{ secrets.APPLE_KEY_ID }}"
-          APPLE_ISSUER_ID: "${{ secrets.APPLE_ISSUER_ID }}"
-          APPLE_KEY_CONTENT: "${{ secrets.APPLE_KEY_CONTENT }}"
-          JUDGE0_KEY: ""
-          JUDGE0_ENDPOINT: ""
-          DISTRIBUTE_EXTERNAL: "true"
-          XCODE_PATH: "/Applications/Xcode_26.2.app"
+      - name: 2. Скачиваем бинарные фреймворки (Python, Node и др.)
+        run: |
+          chmod +x downloadFrameworks.sh
+          ./downloadFrameworks.sh
 
-      - name: Upload Artifact
+      - name: 3. Авто-определение схемы и компиляция проекта
+        run: |
+          # 3.1. Принудительно генерируем схемы по умолчанию и выводим их список в лог
+          echo "=== Доступные схемы в проекте ==="
+          xcodebuild -list -project "Code.xcodeproj"
+          
+          # 3.2. Автоматически находим первую доступную схему
+          SCHEME=$(xcodebuild -list -project "Code.xcodeproj" | awk '/Schemes:/{flag=1;next}/^[[:space:]]*$/{flag=0}flag' | sed 's/^[[:space:]]*//' | head -n 1)
+          
+          echo "================================="
+          echo "Автоматически выбрана схема: '$SCHEME'"
+          echo "================================="
+          
+          if [ -z "$SCHEME" ]; then
+            echo "Ошибка: Не удалось обнаружить ни одной схемы в Xcode проекте!"
+            exit 1
+          fi
+          
+          # 3.3. Запускаем сборку найденной схемы
+          xcodebuild clean build \
+            -project "Code.xcodeproj" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            BUILD_DIR="$(pwd)/build"
+
+      - name: 4. Упаковка в .ipa файл
+        run: |
+          mkdir -p Payload
+          # Находим скомпилированное приложение .app и перемещаем в папку Payload
+          find build -name "*.app" -exec mv {} Payload/ \;
+          zip -qr CodeApp.ipa Payload
+
+      - name: 5. Сохранение готового файла
         uses: actions/upload-artifact@v4
         with:
-          name: ipa-build
-          path: Code.ipa
+          name: CodeApp-Unsigned-IPA
+          path: CodeApp.ipa
