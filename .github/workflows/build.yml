@@ -1,4 +1,4 @@
-name: Build CodeApp (Unsigned)
+name: Build CodeApp (Ad-Hoc)
 
 on:
   workflow_dispatch: # Кнопка для ручного запуска в Actions
@@ -18,13 +18,13 @@ jobs:
           chmod +x downloadFrameworks.sh
           ./downloadFrameworks.sh
 
-      - name: 3. Авто-определение схемы и компиляция (Без подписи)
+      - name: 3. Авто-определение схемы и компиляция (Ad-Hoc подпись через Generic iOS)
         run: |
           # 3.1. Генерируем схемы
           echo "=== Доступные схемы ==="
           xcodebuild -list -project "Code.xcodeproj"
           
-          # 3.2. Находим первую доступную схему
+          # 3.2. Находим первую доступную схему (выберется "Code App")
           SCHEME=$(xcodebuild -list -project "Code.xcodeproj" | awk '/Schemes:/{flag=1;next}/^[[:space:]]*$/{flag=0}flag' | sed 's/^[[:space:]]*//' | head -n 1)
           
           echo "================================="
@@ -36,26 +36,28 @@ jobs:
             exit 1
           fi
           
-          # 3.3. Компилируем найденную схему без подписи
+          # 3.3. Компилируем найденную схему с Ad-Hoc подписью через универсальный таргет устройства
           xcodebuild clean build \
             -project "Code.xcodeproj" \
             -scheme "$SCHEME" \
             -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             BUILD_DIR="$(pwd)/build"
 
       - name: 4. Упаковка скомпилированного приложения в .ipa файл
         run: |
           mkdir -p Payload
-          # Ищем любой скомпилированный файл .app в папке сборки и перемещаем в Payload
+          # Находим скомпилированный файл .app в папке сборки и перемещаем в Payload
           find build -name "*.app" -exec mv {} Payload/ \;
           zip -qr CodeApp.ipa Payload
 
       - name: 5. Сохранение готового файла
         uses: actions/upload-artifact@v4
         with:
-          name: CodeApp-Unsigned-IPA
+          name: CodeApp-AdHoc-IPA
           path: CodeApp.ipa
