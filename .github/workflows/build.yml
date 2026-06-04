@@ -36,8 +36,7 @@ jobs:
             exit 1
           fi
           
-          # 3.3. Компилируем с локальной Ad-Hoc подписью (-)
-          # Это обходит ограничение Xcode на сборку системных расширений без подписи.
+          # 3.3. Компилируем с локальной Ad-Hoc подписью (-) и разрешением на её использование
           xcodebuild clean build \
             -project "Code.xcodeproj" \
             -scheme "$SCHEME" \
@@ -46,6 +45,7 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             BUILD_DIR="$(pwd)/build"
