@@ -1,42 +1,44 @@
-name: Build iOS App
+name: Build CodeApp IPA
 
 on:
-  workflow_dispatch: # Позволяет запускать сборку вручную по кнопке
+  workflow_dispatch: # Кнопка для ручного запуска в Actions
 
 jobs:
   build:
-    runs-on: macos-latest # Бесплатный сервер на Mac от GitHub
+    runs-on: macos-latest # Запуск на сервере Mac от GitHub
 
     steps:
-      - name: Загрузка исходного кода
+      - name: 1. Скачиваем исходный код
         uses: actions/checkout@v4
         with:
-          submodules: recursive # Важно, если проект использует сабмодули
+          submodules: recursive
 
-      - name: Выбор версии Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: 2. Скачиваем бинарные фреймворки (Python, Node и др.)
+        run: |
+          chmod +x downloadFrameworks.sh
+          ./downloadFrameworks.sh
 
-      - name: Сборка приложения (Unsigned)
+      - name: 3. Компиляция проекта через Xcode
         run: |
           xcodebuild clean build \
-            -workspace "CodeApp.xcworkspace" \
-            -scheme "CodeApp" \
+            -project "Code.xcodeproj" \
+            -scheme "Code" \
             -configuration Release \
             -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             BUILD_DIR="$(pwd)/build"
-        # Примечание: Если в проекте нет .xcworkspace, замените -workspace "..." на -project "ИмяПроекта.xcodeproj"
 
-      - name: Упаковка в .ipa
+      - name: 4. Упаковка в .ipa файл
         run: |
           mkdir -p Payload
-          mv build/Release-iphoneos/*.app Payload/
-          zip -qr app.ipa Payload
+          # Находим скомпилированное приложение .app и перемещаем в папку Payload
+          find build -name "*.app" -exec mv {} Payload/ \;
+          zip -qr CodeApp.ipa Payload
 
-      - name: Загрузка артефакта
+      - name: 5. Сохранение готового файла
         uses: actions/upload-artifact@v4
         with:
-          name: App-IPA
-          path: app.ipa
+          name: CodeApp-Unsigned-IPA
+          path: CodeApp.ipa
