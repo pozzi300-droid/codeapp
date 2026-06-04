@@ -1,11 +1,11 @@
 name: Build CodeApp IPA
 
 on:
-  workflow_dispatch: # Кнопка для ручного запуска в Actions
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest # Запуск на сервере Mac от GitHub
+    runs-on: macos-latest
 
     steps:
       - name: 1. Скачиваем исходный код
@@ -18,44 +18,47 @@ jobs:
           chmod +x downloadFrameworks.sh
           ./downloadFrameworks.sh
 
-      - name: 3. Авто-определение схемы и компиляция проекта
+      - name: 3. Авто-определение схемы и компиляция проекта (Ad-Hoc подпись)
         run: |
-          # 3.1. Принудительно генерируем схемы по умолчанию и выводим их список в лог
-          echo "=== Доступные схемы в проекте ==="
+          # 3.1. Генерируем схемы
+          echo "=== Доступные схемы ==="
           xcodebuild -list -project "Code.xcodeproj"
           
-          # 3.2. Автоматически находим первую доступную схему
+          # 3.2. Находим первую доступную схему
           SCHEME=$(xcodebuild -list -project "Code.xcodeproj" | awk '/Schemes:/{flag=1;next}/^[[:space:]]*$/{flag=0}flag' | sed 's/^[[:space:]]*//' | head -n 1)
           
           echo "================================="
-          echo "Автоматически выбрана схема: '$SCHEME'"
+          echo "Выбрана схема: '$SCHEME'"
           echo "================================="
           
           if [ -z "$SCHEME" ]; then
-            echo "Ошибка: Не удалось обнаружить ни одной схемы в Xcode проекте!"
+            echo "Ошибка: Схема не найдена!"
             exit 1
           fi
           
-          # 3.3. Запускаем сборку найденной схемы
+          # 3.3. Компилируем с локальной Ad-Hoc подписью (-)
+          # Это обходит ограничение Xcode на сборку системных расширений без подписи.
           xcodebuild clean build \
             -project "Code.xcodeproj" \
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             BUILD_DIR="$(pwd)/build"
 
       - name: 4. Упаковка в .ipa файл
         run: |
           mkdir -p Payload
-          # Находим скомпилированное приложение .app и перемещаем в папку Payload
+          # Находим собранный .app и перемещаем его в Payload
           find build -name "*.app" -exec mv {} Payload/ \;
           zip -qr CodeApp.ipa Payload
 
       - name: 5. Сохранение готового файла
         uses: actions/upload-artifact@v4
         with:
-          name: CodeApp-Unsigned-IPA
+          name: CodeApp-AdHoc-IPA
           path: CodeApp.ipa
