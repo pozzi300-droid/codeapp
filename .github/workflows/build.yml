@@ -35,7 +35,7 @@ jobs:
           # 2. Удаляем файлы и группы Preview Content из структуры проекта Xcode
           project.objects.each do |obj|
             if obj.respond_to?(:path) && obj.path && (obj.path.include?('Preview Content') || obj.path.include?('Preview Assets'))
-              obj.remove_from_project
+                obj.remove_from_project
             end
           end
 
