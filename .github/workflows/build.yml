@@ -77,9 +77,13 @@ jobs:
             -scheme "Code App" \
             -configuration Release \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            ENTITLEMENTS_REQUIRED=NO \
+            ENABLE_PREVIEWS=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
             BUILD_DIR="$(pwd)/build"
 
       - name: 5. Упаковка в .ipa
