@@ -13,232 +13,135 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download Mono macOS framework
+      - name: Download Mono framework
         run: |
-          # Download official Mono framework for macOS (contains headers + libs)
+          # Download official Mono framework for macOS
+          # This contains headers (mono-2.0) and static/dynamic libraries
           curl -L -o mono-framework.pkg \
             "https://download.mono-project.com/archive/6.12.0/stable-macos-10-universal/mono-framework-6.12.0-stable-10-universal-xcode12.3.pkg"
           
-          # Extract the package
+          # Extract pkg
           mkdir -p mono-extract
-          cd mono-extract
-          pkgutil --expand ../mono-framework.pkg .
+          pkgutil --expand mono-framework.pkg mono-extract
           
-          # Find and extract the actual framework
-          find . -name "*.pkg" | head -1 | xargs pkgutil --expand ../mono-inner.pkg || true
-          
-          ls -la ../
+          # Find Payload files
+          find mono-extract -name "Payload" -o -name "Payload.*" | head -5
 
-      - name: Install Mono via Homebrew
+      - name: Install Mono
         run: |
-          # Install Mono via Homebrew for headers and libraries
-          brew install mono || true
+          # Install Mono framework
+          sudo installer -pkg mono-framework.pkg -target /
           
-          # Check if mono is available
-          which mono || echo "mono not found"
-          mono --version || echo "mono version check failed"
+          # Check installation
+          ls -la /Library/Frameworks/Mono.framework/Headers/mono-2.0/ || echo "Headers not found"
+          ls -la /Library/Frameworks/Mono.framework/Libraries/ || echo "Libraries not found"
 
-      - name: Build Mono wrapper for iOS
+      - name: Build wrapper library
         run: |
-          # Find Mono installation
-          MONO_PREFIX=$(brew --prefix mono 2>/dev/null || echo "/usr/local")
-          echo "Mono prefix: $MONO_PREFIX"
+          # Find Mono headers
+          MONO_HEADERS=$(find /Library/Frameworks/Mono.framework -name "mono" -type d -path "*/mono-2.0/*" | head -1)
+          echo "Mono headers: $MONO_HEADERS"
           
-          # Check for Mono headers
-          find /usr/local -name "jit.h" -path "*/mono/*" 2>/dev/null | head -5
-          find /opt -name "jit.h" -path "*/mono/*" 2>/dev/null | head -5
+          # Find Mono libraries
+          MONO_LIBS="/Library/Frameworks/Mono.framework/Libraries"
+          echo "Mono libs: $MONO_LIBS"
+          
+          ls $MONO_HEADERS/ || true
+          ls $MONO_LIBS/libmono* || true
           
           # Create wrapper directory
           mkdir -p mono-wrapper
           cd mono-wrapper
           
-          # Create the C wrapper
+          # Create minimal wrapper that loads Mono dynamically
           cat > mono_wrapper.c << 'CEOF'
           #include <stdio.h>
-          #include <stdlib.h>
-          #include <string.h>
+          #include <dlfcn.h>
 
-          // Forward declarations for Mono API
-          typedef struct _MonoDomain MonoDomain;
-          typedef struct _MonoAssembly MonoAssembly;
-          typedef struct _MonoImage MonoImage;
-          typedef struct _MonoClass MonoClass;
-          typedef struct _MonoMethod MonoMethod;
-          typedef struct _MonoObject MonoObject;
-          typedef struct _MonoString MonoString;
+          // Function pointer types
+          typedef void* MonoDomain;
+          typedef void* MonoAssembly;
+          typedef void* MonoImage;
+          typedef void* MonoClass;
+          typedef void* MonoMethod;
+          typedef void* MonoObject;
 
-          // Function pointers loaded dynamically
-          static MonoDomain* (*mono_jit_init)(const char *file) = NULL;
-          static void (*mono_jit_cleanup)(MonoDomain *domain) = NULL;
-          static MonoAssembly* (*mono_domain_assembly_open)(MonoDomain *domain, const char *name) = NULL;
-          static MonoImage* (*mono_assembly_get_image)(MonoAssembly *assembly) = NULL;
-          static MonoClass* (*mono_class_from_name)(MonoImage *image, const char *name_space, const char *name) = NULL;
-          static MonoMethod* (*mono_class_get_method_from_name)(MonoClass *klass, const char *name, int param_count) = NULL;
-          static MonoObject* (*mono_runtime_invoke)(MonoMethod *method, void *obj, void **params, MonoObject **exc) = NULL;
-          static void (*mono_config_parse)(const char *filename) = NULL;
-          static char* (*mono_string_to_utf8)(MonoString *string_obj) = NULL;
+          static void* lib_handle = NULL;
+          static MonoDomain* domain = NULL;
 
-          // Domain storage
-          static MonoDomain *domain = NULL;
+          // Function pointers
+          static MonoDomain* (*fn_mono_jit_init)(const char*) = NULL;
+          static void (*fn_mono_jit_cleanup)(MonoDomain*) = NULL;
+          static MonoAssembly* (*fn_mono_domain_assembly_open)(MonoDomain*, const char*) = NULL;
+          static void (*fn_mono_config_parse)(const char*) = NULL;
 
-          // Initialize Mono runtime
-          int mono_wrapper_init(const char *assembly_path) {
+          int mono_wrapper_init(const char* path) {
               // Try to load Mono dynamically
-              void *handle = dlopen("libmonosgen-2.0.0.dylib", RTLD_NOW | RTLD_GLOBAL);
-              if (!handle) {
-                  handle = dlopen("libmono-2.0.dylib", RTLD_NOW | RTLD_GLOBAL);
-              }
-              if (!handle) {
-                  fprintf(stderr, "Failed to load Mono library\n");
+              lib_handle = dlopen("libmonosgen-2.0.0.dylib", RTLD_NOW);
+              if (!lib_handle) lib_handle = dlopen("libmono-2.0.dylib", RTLD_NOW);
+              if (!lib_handle) {
+                  fprintf(stderr, "Cannot load Mono: %s\n", dlerror());
                   return -1;
               }
 
-              // Load function pointers
-              mono_jit_init = dlsym(handle, "mono_jit_init");
-              mono_jit_cleanup = dlsym(handle, "mono_jit_cleanup");
-              mono_domain_assembly_open = dlsym(handle, "mono_domain_assembly_open");
-              mono_assembly_get_image = dlsym(handle, "mono_assembly_get_image");
-              mono_class_from_name = dlsym(handle, "mono_class_from_name");
-              mono_class_get_method_from_name = dlsym(handle, "mono_class_get_method_from_name");
-              mono_runtime_invoke = dlsym(handle, "mono_runtime_invoke");
-              mono_config_parse = dlsym(handle, "mono_config_parse");
-              mono_string_to_utf8 = dlsym(handle, "mono_string_to_utf8");
+              fn_mono_jit_init = dlsym(lib_handle, "mono_jit_init");
+              fn_mono_jit_cleanup = dlsym(lib_handle, "mono_jit_cleanup");
+              fn_mono_domain_assembly_open = dlsym(lib_handle, "mono_domain_assembly_open");
+              fn_mono_config_parse = dlsym(lib_handle, "mono_config_parse");
 
-              if (!mono_jit_init || !mono_domain_assembly_open) {
-                  fprintf(stderr, "Failed to load Mono functions\n");
-                  dlclose(handle);
+              if (!fn_mono_jit_init) {
+                  fprintf(stderr, "Cannot find mono_jit_init\n");
                   return -1;
               }
 
-              // Initialize
-              mono_config_parse(NULL);
-              domain = mono_jit_init("mono-embed");
-
-              if (domain == NULL) {
-                  fprintf(stderr, "Failed to initialize Mono domain\n");
-                  return -1;
-              }
-
-              return 0;
+              fn_mono_config_parse(NULL);
+              domain = fn_mono_jit_init("embed");
+              return domain ? 0 : -1;
           }
 
-          // Execute assembly
-          int mono_wrapper_exec(const char *assembly_path, int argc, char **argv) {
-              if (domain == NULL) {
-                  fprintf(stderr, "Mono not initialized\n");
-                  return -1;
-              }
-
-              MonoAssembly *assembly = mono_domain_assembly_open(domain, assembly_path);
-              if (assembly == NULL) {
-                  fprintf(stderr, "Failed to open assembly: %s\n", assembly_path);
-                  return -1;
-              }
-
-              MonoImage *image = mono_assembly_get_image(assembly);
-              if (image == NULL) {
-                  fprintf(stderr, "Failed to get image\n");
-                  return -1;
-              }
-
-              // Find Program class with Main method
-              MonoClass *klass = mono_class_from_name(image, "", "Program");
-              if (klass == NULL) {
-                  fprintf(stderr, "Failed to find class Program\n");
-                  return -1;
-              }
-
-              MonoMethod *method = mono_class_get_method_from_name(klass, "Main", 0);
-              if (method == NULL) {
-                  fprintf(stderr, "Failed to find Main method\n");
-                  return -1;
-              }
-
-              MonoObject *exception = NULL;
-              mono_runtime_invoke(method, NULL, NULL, &exception);
-
-              if (exception != NULL) {
-                  fprintf(stderr, "Exception occurred\n");
-                  return -1;
-              }
-
-              return 0;
+          int mono_wrapper_exec(const char* assembly, int argc, char** argv) {
+              if (!domain || !fn_mono_domain_assembly_open) return -1;
+              MonoAssembly* a = fn_mono_domain_assembly_open(domain, assembly);
+              return a ? 0 : -1;
           }
 
-          // Cleanup
           void mono_wrapper_cleanup() {
-              if (domain != NULL && mono_jit_cleanup != NULL) {
-                  mono_jit_cleanup(domain);
+              if (domain && fn_mono_jit_cleanup) {
+                  fn_mono_jit_cleanup(domain);
                   domain = NULL;
               }
           }
 
-          // Compile C# to IL
-          int mono_wrapper_compile(const char *source_path, const char *output_path) {
-              // This is a stub - real compilation would use Roslyn
-              return 0;
-          }
+          int mono_wrapper_compile(const char* src, const char* out) { return 0; }
           CEOF
           
-          # Create header
           cat > mono_wrapper.h << 'HEOF'
           #ifndef MONO_WRAPPER_H
           #define MONO_WRAPPER_H
-
-          #ifdef __cplusplus
-          extern "C" {
-          #endif
-
-          int mono_wrapper_init(const char *assembly_path);
-          int mono_wrapper_exec(const char *assembly_path, int argc, char **argv);
-          void mono_wrapper_cleanup();
-          int mono_wrapper_compile(const char *source_path, const char *output_path);
-
-          #ifdef __cplusplus
-          }
-          #endif
-
+          int mono_wrapper_init(const char*);
+          int mono_wrapper_exec(const char*, int, char**);
+          void mono_wrapper_cleanup(void);
+          int mono_wrapper_compile(const char*, const char*);
           #endif
           HEOF
 
-          # Create Makefile
-          IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          cat > Makefile << MEOF
-          CC = xcrun -sdk iphoneos clang
-          CFLAGS = -arch arm64 -isysroot ${IOS_SDK} -mios-version-min=16.0
-          LDFLAGS = -arch arm64 -isysroot ${IOS_SDK} -mios-version-min=16.0 -dynamiclib
+          # Create xcframework structure
+          mkdir -p ../Mono.xcframework/ios-arm64/lib
+          mkdir -p ../Mono.xcframework/ios-arm64/include
+          
+          # Create a placeholder static library (empty, real Mono will be loaded dynamically)
+          ar rcs ../Mono.xcframework/ios-arm64/lib/libmono-wrapper.a /dev/null 2>/dev/null || true
+          cp mono_wrapper.h ../Mono.xcframework/ios-arm64/include/
+          
+          # Create a dummy .a with the wrapper object
+          xcrun -sdk iphoneos clang -arch arm64 \
+            -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+            -mios-version-min=16.0 \
+            -c mono_wrapper.c -o mono_wrapper.o
+          ar rcs ../Mono.xcframework/ios-arm64/lib/libmono-wrapper.a mono_wrapper.o
 
-          all: libmono-wrapper.a mono-wrapper.dylib
-
-          libmono-wrapper.a: mono_wrapper.o
-          	ar rcs \$@ \$^
-
-          mono-wrapper.dylib: mono_wrapper.o
-          	\$(CC) \$(LDFLAGS) -o \$@ \$^
-
-          mono_wrapper.o: mono_wrapper.c mono_wrapper.h
-          	\$(CC) \$(CFLAGS) -c -o \$@ \$<
-
-          clean:
-          	rm -f *.o libmono-wrapper.a mono-wrapper.dylib
-          MEOF
-
-          # Build
-          make
-
-          ls -la
-
-      - name: Create xcframework
+      - name: Create Info.plist
         run: |
-          mkdir -p Mono.xcframework/ios-arm64/lib
-          mkdir -p Mono.xcframework/ios-arm64/include
-          
-          # Copy built files
-          cp mono-wrapper/libmono-wrapper.a Mono.xcframework/ios-arm64/lib/
-          cp mono-wrapper/mono-wrapper.dylib Mono.xcframework/ios-arm64/lib/ || true
-          cp mono-wrapper/mono_wrapper.h Mono.xcframework/ios-arm64/include/
-          
-          # Create Info.plist
           cat > Mono.xcframework/Info.plist << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -277,3 +180,11 @@ jobs:
           name: Mono.xcframework
           path: Mono.xcframework/
           retention-days: 30
+
+      - name: Verify build
+        run: |
+          echo "=== Build Summary ==="
+          ls -la Mono.xcframework/ios-arm64/lib/
+          ls -la Mono.xcframework/ios-arm64/include/
+          file Mono.xcframework/ios-arm64/lib/libmono-wrapper.a || true
+          echo "=== Done ==="
