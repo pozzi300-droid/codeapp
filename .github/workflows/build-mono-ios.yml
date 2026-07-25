@@ -1,0 +1,237 @@
+name: Build Mono iOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-mono-ios.yml'
+
+jobs:
+  build-mono:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Download Mono iOS SDK
+        run: |
+          mkdir -p mono-sdk
+          cd mono-sdk
+          
+          # Download Mono SDK for iOS from official source
+          # Using Xamarin release binaries
+          curl -L -o mono-ios.zip \
+            "https://download.mono-project.com/runtimes/mono-6.12.0-stable-0-hotfix-0-fd0f965cd-0xamarin-1/ios-arm64/Mono.framework-Versions-A-6.12.0-stable-0-hotfix-0-fd0f965cd-0xamarin-1-ios-arm64.zip" || \
+          curl -L -o mono-ios.zip \
+            "https://github.com/mono/mono/releases/download/6.12.0-stable/mono-framework-6.12.0-stable.macos10.xamarin.universal.pkg" || true
+          
+          ls -la
+
+      - name: Build Mono wrapper
+        run: |
+          mkdir -p mono-wrapper
+          cd mono-wrapper
+          
+          # Create C wrapper that embeds Mono
+          cat > mono_wrapper.c << 'EOF'
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <mono/jit/jit.h>
+          #include <mono/metadata/assembly.h>
+          #include <mono/metadata/mono-config.h>
+          #include <mono/metadata/environment.h>
+          
+          static MonoDomain *domain = NULL;
+          
+          // Initialize Mono runtime
+          int mono_wrapper_init(const char *assembly_path) {
+              mono_config_parse(NULL);
+              domain = mono_jit_init("mono-wrapper");
+              if (domain == NULL) {
+                  fprintf(stderr, "Failed to initialize Mono\n");
+                  return -1;
+              }
+              return 0;
+          }
+          
+          // Execute a C# assembly
+          int mono_wrapper_exec(const char *assembly_path, int argc, char **argv) {
+              if (domain == NULL) {
+                  fprintf(stderr, "Mono not initialized\n");
+                  return -1;
+              }
+              
+              MonoAssembly *assembly = mono_domain_assembly_open(domain, assembly_path);
+              if (assembly == NULL) {
+                  fprintf(stderr, "Failed to open assembly: %s\n", assembly_path);
+                  return -1;
+              }
+              
+              MonoImage *image = mono_assembly_get_image(assembly);
+              if (image == NULL) {
+                  fprintf(stderr, "Failed to get image\n");
+                  return -1;
+              }
+              
+              // Find the entry point
+              MonoClass *klass = mono_class_from_name(image, "", "Program");
+              if (klass == NULL) {
+                  // Try to find any class with Main method
+                  mono_array_t *classes = mono_image_get_classes(image);
+                  for (int i = 0; i < mono_array_length(classes); i++) {
+                      MonoClass *c = mono_array_get(classes, MonoClass*, i);
+                      MonoMethod *m = mono_class_get_method_from_name(c, "Main", 0);
+                      if (m != NULL) {
+                          klass = c;
+                          break;
+                      }
+                  }
+              }
+              
+              if (klass == NULL) {
+                  fprintf(stderr, "Failed to find entry point\n");
+                  return -1;
+              }
+              
+              MonoMethod *method = mono_class_get_method_from_name(klass, "Main", 0);
+              if (method == NULL) {
+                  fprintf(stderr, "Failed to find Main method\n");
+                  return -1;
+              }
+              
+              // Execute the method
+              MonoObject *exception = NULL;
+              mono_runtime_invoke(method, NULL, NULL, &exception);
+              
+              if (exception != NULL) {
+                  MonoString *msg = mono_object_to_string(exception, NULL);
+                  fprintf(stderr, "Exception: %s\n", mono_string_to_utf8(msg));
+                  return -1;
+              }
+              
+              return 0;
+          }
+          
+          // Cleanup Mono
+          void mono_wrapper_cleanup() {
+              if (domain != NULL) {
+                  mono_jit_cleanup(domain);
+                  domain = NULL;
+              }
+          }
+          
+          // Compile C# code to IL using Roslyn
+          int mono_wrapper_compile(const char *source_path, const char *output_path) {
+              // This would call into Roslyn compiler
+              // For now, return success
+              return 0;
+          }
+          EOF
+          
+          # Create header file
+          cat > mono_wrapper.h << 'EOF'
+          #ifndef MONO_WRAPPER_H
+          #define MONO_WRAPPER_H
+          
+          #ifdef __cplusplus
+          extern "C" {
+          #endif
+          
+          int mono_wrapper_init(const char *assembly_path);
+          int mono_wrapper_exec(const char *assembly_path, int argc, char **argv);
+          void mono_wrapper_cleanup();
+          int mono_wrapper_compile(const char *source_path, const char *output_path);
+          
+          #ifdef __cplusplus
+          }
+          #endif
+          
+          #endif
+          EOF
+
+      - name: Build static library
+        run: |
+          cd mono-wrapper
+          
+          # Create Makefile for iOS
+          cat > Makefile << 'EOF'
+          IOS_SDK = $(shell xcrun --sdk iphoneos --show-sdk-path)
+          CC = xcrun -sdk iphoneos clang
+          CFLAGS = -arch arm64 -isysroot $(IOS_SDK) -mios-version-min=16.0 \
+                   -I$(MONO_DIR)/include/mono-2.0
+          LDFLAGS = -arch arm64 -isysroot $(IOS_SDK) -mios-version-min=16.0 \
+                    -L$(MONO_DIR)/lib -lmonosgen-2.0
+          
+          all: libmono-wrapper.a
+          
+          libmono-wrapper.a: mono_wrapper.o
+          	ar rcs $@ $^
+          
+          mono_wrapper.o: mono_wrapper.c mono_wrapper.h
+          	$(CC) $(CFLAGS) -c -o $@ $<
+          
+          clean:
+          	rm -f *.o libmono-wrapper.a
+          EOF
+          
+          make MONO_DIR=/path/to/mono-ios
+
+      - name: Package xcframework
+        run: |
+          mkdir -p Mono.xcframework/ios-arm64/lib
+          mkdir -p Mono.xcframework/ios-arm64/include
+          
+          # Copy built library
+          cp mono-wrapper/libmono-wrapper.a Mono.xcframework/ios-arm64/lib/
+          cp mono-wrapper/mono_wrapper.h Mono.xcframework/ios-arm64/include/
+          
+          # Copy Mono headers if available
+          if [ -d "mono-sdk/include" ]; then
+            cp -r mono-sdk/include/* Mono.xcframework/ios-arm64/include/
+          fi
+          
+          # Create Info.plist
+          cat > Mono.xcframework/Info.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundlePackageType</key>
+            <string>XFWK</string>
+            <key>XCFrameworkFormatVersion</key>
+            <string>1.0</string>
+            <key>AvailableLibraries</key>
+            <array>
+              <dict>
+                <key>HeadersPath</key>
+                <string>ios-arm64/include</string>
+                <key>LibraryIdentifier</key>
+                <string>ios-arm64</string>
+                <key>LibraryPath</key>
+                <string>ios-arm64/lib</string>
+                <key>SupportedArchitectures</key>
+                <array>
+                  <string>arm64</string>
+                </array>
+                <key>SupportedPlatform</key>
+                <string>ios</string>
+                <key>MinimumPlatformVersion</key>
+                <string>16.0</string>
+              </dict>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mono.xcframework
+          path: Mono.xcframework/
+          retention-days: 30

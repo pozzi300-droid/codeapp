@@ -26,6 +26,10 @@ class LanguageService {
             languageIdentifier: "java",
             extensions: ["java"],
             args: ["java", "-jar", "${JAVA_LSP_FAT_JAR_PATH}"]),
+        Configuration(
+            languageIdentifier: "csharp",
+            extensions: ["cs", "csx"],
+            args: ["csrun"]),
     ]
 
     static func configurationFor(url: URL) -> Configuration? {

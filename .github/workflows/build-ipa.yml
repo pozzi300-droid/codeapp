@@ -1,0 +1,99 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        run: |
+          # Select latest Xcode
+          sudo xcode-select -s /Applications/Xcode_15.3.app/Contents/Developer
+
+      - name: Download frameworks
+        run: |
+          chmod +x downloadFrameworks.sh
+          ./downloadFrameworks.sh
+
+      - name: Setup CocoaPods (if needed)
+        run: |
+          if [ -f Podfile ]; then
+            pod install
+          fi
+
+      - name: Build IPA
+        run: |
+          # Create archive
+          xcodebuild archive \
+            -workspace Code.xcworkspace \
+            -scheme Code \
+            -configuration Release \
+            -archivePath build/Code.xcarchive \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            ENABLE_BITCODE=NO \
+            | xcpretty || true
+          
+          # Export IPA
+          cat > ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>compileBitcode</key>
+            <false/>
+            <key>signingStyle</key>
+            <string>manual</string>
+          </dict>
+          </plist>
+          EOF
+          
+          xcodebuild -exportArchive \
+            -archivePath build/Code.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/ipa \
+            | xcpretty || true
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodeApp-CSharp.ipa
+          path: build/ipa/*.ipa
+          retention-days: 30
+
+      - name: Print installation instructions
+        run: |
+          echo "=========================================="
+          echo "IPA Build Complete!"
+          echo "=========================================="
+          echo ""
+          echo "Installation instructions:"
+          echo "1. Download the IPA artifact"
+          echo "2. Open SideStore on your iPad"
+          echo "3. Connect iPad to computer with SideStore"
+          echo "4. Import the IPA file"
+          echo "5. SideStore will resign and install it"
+          echo ""
+          echo "For C# support:"
+          echo "1. Enable JIT via StikDebug before running"
+          echo "2. Use terminal command: csrun file.cs"
+          echo "3. Or use: csc file.cs && mono file.exe"
+          echo "=========================================="

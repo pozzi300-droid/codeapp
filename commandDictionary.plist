@@ -653,5 +653,33 @@
 		<string>3bBc:dEhiJm:OQ:RsStuUvVW:xX?</string>
 		<string>file</string>
 	</array>
+	<key>csc</key>
+	<array>
+		<string>Mono.framework/Mono</string>
+		<string>csc</string>
+		<string></string>
+		<string>file</string>
+	</array>
+	<key>csrun</key>
+	<array>
+		<string>Mono.framework/Mono</string>
+		<string>csrun</string>
+		<string></string>
+		<string>file</string>
+	</array>
+	<key>csx</key>
+	<array>
+		<string>Mono.framework/Mono</string>
+		<string>csx</string>
+		<string></string>
+		<string>file</string>
+	</array>
+	<key>dotnet</key>
+	<array>
+		<string>Mono.framework/Mono</string>
+		<string>dotnet</string>
+		<string></string>
+		<string>file</string>
+	</array>
 </dict>
 </plist>
