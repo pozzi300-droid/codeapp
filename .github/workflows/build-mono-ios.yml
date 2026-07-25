@@ -21,10 +21,11 @@ jobs:
 
       - name: Extract Mono framework
         run: |
-          # Extract the pkg
-          mkdir -p mono-extract
+          # Extract the pkg (clean first)
+          rm -rf mono-extract
+          mkdir mono-extract
           pkgutil --expand mono-framework.pkg mono-extract
-          
+
           # List contents
           find mono-extract -maxdepth 3 -type d | head -20
 
