@@ -6,14 +6,7 @@
 //
 
 import Foundation
-import Darwin
 import ios_system
-
-@_silgen_name("ios_stdout")
-private func codeapp_ios_stdout() -> UnsafeMutablePointer<FILE>?
-
-@_silgen_name("ios_stderr")
-private func codeapp_ios_stderr() -> UnsafeMutablePointer<FILE>?
 
 @_cdecl("csc")
 public func csc(
@@ -238,12 +231,12 @@ private final class CSharpRuntime {
     }
 
     private var outputFileDescriptor: Int32? {
-        guard let stream = codeapp_ios_stdout() else { return nil }
+        guard let stream = thread_stdout else { return nil }
         return fileno(stream)
     }
 
     private var errorFileDescriptor: Int32? {
-        guard let stream = codeapp_ios_stderr() else { return nil }
+        guard let stream = thread_stderr else { return nil }
         return fileno(stream)
     }
 
@@ -265,19 +258,15 @@ private final class CSharpRuntime {
     }
 
     private func write(_ message: String, to fileDescriptor: Int32) -> Bool {
-        let bytes = Array(message.utf8)
-        return bytes.withUnsafeBytes { buffer in
-            guard let baseAddress = buffer.baseAddress else { return true }
-            var offset = 0
-            while offset < buffer.count {
-                let count = Darwin.write(
-                    fileDescriptor,
-                    baseAddress.advanced(by: offset),
-                    buffer.count - offset)
-                if count <= 0 { return false }
-                offset += count
-            }
+        guard fileDescriptor >= 0 else { return false }
+        let data = Data(message.utf8)
+        do {
+            try FileHandle(fileDescriptor: fileDescriptor, closeOnDealloc: false)
+                .write(contentsOf: data)
             return true
+        } catch {
+            NSLog("C# terminal write failed: %@", error.localizedDescription)
+            return false
         }
     }
 }
