@@ -84,15 +84,37 @@ jobs:
       - name: Verify C# payload in built app
         run: |
           APP="$(find build/Release-iphoneos -maxdepth 1 -type d -name '*.app' | head -n 1)"
-          test -n "$APP"
-          test -f "$APP/MonoManaged/runtime/System.Private.CoreLib.dll"
-          test -f "$APP/MonoManaged/tools/csc.dll"
-          test -f "$APP/MonoManaged/ref/System.Runtime.dll"
+          if [[ -z "$APP" ]]; then
+            echo "No .app bundle was produced." >&2
+            find build -maxdepth 3 -print
+            exit 1
+          fi
+
+          require_file() {
+            if [[ ! -f "$1" ]]; then
+              echo "Required bundle file is missing: $1" >&2
+              find "$APP" -maxdepth 4 -type f -print | sort
+              exit 1
+            fi
+          }
+
+          require_file "$APP/MonoManaged/runtime/System.Private.CoreLib.dll"
+          require_file "$APP/MonoManaged/tools/csc.dll"
+          require_file "$APP/MonoManaged/ref/System.Runtime.dll"
           find "$APP" -type d -name '*.appex' -print > "$RUNNER_TEMP/embedded-extensions.txt"
-          test -s "$RUNNER_TEMP/embedded-extensions.txt"
+          if [[ ! -s "$RUNNER_TEMP/embedded-extensions.txt" ]]; then
+            echo "The App Extension is missing from the built app." >&2
+            find "$APP" -maxdepth 4 -print | sort
+            exit 1
+          fi
           nm -gU "$APP/Code" > "$RUNNER_TEMP/code-symbols.txt"
-          grep -q '_codeapp_mono_exec$' "$RUNNER_TEMP/code-symbols.txt"
-          grep -q '_mono_jit_init$' "$RUNNER_TEMP/code-symbols.txt"
+          for symbol in _codeapp_mono_exec _mono_jit_init; do
+            if ! grep -q "${symbol}$" "$RUNNER_TEMP/code-symbols.txt"; then
+              echo "Required native symbol is missing: $symbol" >&2
+              grep -E 'mono|codeapp' "$RUNNER_TEMP/code-symbols.txt" || true
+              exit 1
+            fi
+          done
           echo "Embedded extensions:"
           cat "$RUNNER_TEMP/embedded-extensions.txt"
           du -sh "$APP" "$APP/MonoManaged"
