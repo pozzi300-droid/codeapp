@@ -6,7 +6,28 @@
 //
 
 import Foundation
+import Darwin
 import ios_system
+
+private let csharpStdoutKey = "CodeApp.CSharp.stdout"
+private let csharpStderrKey = "CodeApp.CSharp.stderr"
+
+func setCSharpCommandStreams(
+    stdout: UnsafeMutablePointer<FILE>?,
+    stderr: UnsafeMutablePointer<FILE>?
+) {
+    let dictionary = Thread.current.threadDictionary
+    if let stdout {
+        dictionary[csharpStdoutKey] = NSNumber(value: fileno(stdout))
+    } else {
+        dictionary.removeObject(forKey: csharpStdoutKey)
+    }
+    if let stderr {
+        dictionary[csharpStderrKey] = NSNumber(value: fileno(stderr))
+    } else {
+        dictionary.removeObject(forKey: csharpStderrKey)
+    }
+}
 
 @_cdecl("csc")
 public func csc(
@@ -118,8 +139,9 @@ private final class CSharpRuntime {
 
     private func dotnetCommand(_ args: [String], currentDirectory: URL) -> Int32 {
         guard let verb = args.first else {
-            writeOutput("Code App .NET host (offline Mono runtime)\nUsage: dotnet run [file.cs]\n")
-            return 0
+            return writeOutput(
+                "Code App .NET host (offline Mono runtime)\nUsage: dotnet run [file.cs]\n")
+                ? 0 : 74
         }
 
         switch verb {
@@ -128,8 +150,7 @@ private final class CSharpRuntime {
         case "build":
             return compileCommand(Array(args.dropFirst()), currentDirectory: currentDirectory)
         case "--info", "--version":
-            writeOutput("Code App .NET 8 Mono host for iOS arm64\n")
-            return 0
+            return writeOutput("Code App .NET 8 Mono host for iOS arm64\n") ? 0 : 74
         default:
             writeError("dotnet \(verb) is unavailable offline. Supported: run, build, --info.\n")
             return 64
@@ -211,11 +232,9 @@ private final class CSharpRuntime {
         var cArguments = arguments.map { strdup($0) }
         defer { cArguments.forEach { free($0) } }
 
-        guard let output = thread_stdout, let errorOutput = thread_stderr else {
+        guard let outputFD = outputFileDescriptor, let errorFD = errorFileDescriptor else {
             return 74
         }
-        fflush(output)
-        fflush(errorOutput)
 
         return searchPath.withCString { searchPathPointer in
             assembly.path.withCString { assemblyPointer in
@@ -225,20 +244,54 @@ private final class CSharpRuntime {
                         assemblyPointer,
                         Int32(buffer.count),
                         buffer.baseAddress,
-                        fileno(output),
-                        fileno(errorOutput))
+                        outputFD,
+                        errorFD)
                 }
             }
         }
     }
 
-    private func writeOutput(_ message: String) {
-        fputs(message, thread_stdout)
-        fflush(thread_stdout)
+    private var outputFileDescriptor: Int32? {
+        if let stream = thread_stdout { return fileno(stream) }
+        return (Thread.current.threadDictionary[csharpStdoutKey] as? NSNumber)?.int32Value
+    }
+
+    private var errorFileDescriptor: Int32? {
+        if let stream = thread_stderr { return fileno(stream) }
+        return (Thread.current.threadDictionary[csharpStderrKey] as? NSNumber)?.int32Value
+    }
+
+    @discardableResult
+    private func writeOutput(_ message: String) -> Bool {
+        guard let fileDescriptor = outputFileDescriptor else {
+            NSLog("C# stdout is unavailable: %@", message)
+            return false
+        }
+        return write(message, to: fileDescriptor)
     }
 
     private func writeError(_ message: String) {
-        fputs(message, thread_stderr)
-        fflush(thread_stderr)
+        guard let fileDescriptor = errorFileDescriptor else {
+            NSLog("C# stderr is unavailable: %@", message)
+            return
+        }
+        _ = write(message, to: fileDescriptor)
+    }
+
+    private func write(_ message: String, to fileDescriptor: Int32) -> Bool {
+        let bytes = Array(message.utf8)
+        return bytes.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return true }
+            var offset = 0
+            while offset < buffer.count {
+                let count = Darwin.write(
+                    fileDescriptor,
+                    baseAddress.advanced(by: offset),
+                    buffer.count - offset)
+                if count <= 0 { return false }
+                offset += count
+            }
+            return true
+        }
     }
 }

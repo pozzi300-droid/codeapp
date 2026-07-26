@@ -213,6 +213,9 @@ class Executor {
             ios_setContext(UnsafeMutableRawPointer(mutating: self.persistentIdentifier.toCString()))
             ios_setStreams(self.stdin_file, self.stdout_file, self.stdout_file)
 
+            setCSharpCommandStreams(stdout: self.stdout_file, stderr: self.stdout_file)
+            defer { setCSharpCommandStreams(stdout: nil, stderr: nil) }
+
             let code = self.run(command: command)
 
             close(stdin_pipe.fileHandleForReading.fileDescriptor)
