@@ -84,11 +84,14 @@ printf '  %s\n' "${RUNTIME_LIBRARIES[@]}"
 
 libtool -static -o "$WORK_DIR/libMonoRuntime.a" "${RUNTIME_LIBRARIES[@]}"
 
-if ! nm -gU "$WORK_DIR/libMonoRuntime.a" | grep -q '_mono_jit_init$'; then
+SYMBOLS_FILE="$WORK_DIR/mono-runtime-symbols.txt"
+nm -gU "$WORK_DIR/libMonoRuntime.a" > "$SYMBOLS_FILE"
+
+if ! grep -q '_mono_jit_init$' "$SYMBOLS_FILE"; then
     echo "Mono runtime archive has no mono_jit_init symbol." >&2
     exit 1
 fi
-if ! nm -gU "$WORK_DIR/libMonoRuntime.a" | grep -q '_mono_jit_compile_method$'; then
+if ! grep -q '_mono_jit_compile_method$' "$SYMBOLS_FILE"; then
     echo "The official ios-arm64 runtime pack was built without the Mono JIT compiler." >&2
     echo "A source build is required for the StikDebug/JIT configuration." >&2
     exit 1
