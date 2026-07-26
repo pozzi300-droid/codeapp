@@ -23,6 +23,7 @@ class TerminalInstance: NSObject, WKScriptMessageHandler, WKNavigationDelegate, 
     let id: UUID
     var name: String
     private(set) var isReady = false
+    private var pendingScripts: [String] = []
 
     var options: TerminalOptions {
         didSet {
@@ -200,10 +201,28 @@ class TerminalInstance: NSObject, WKScriptMessageHandler, WKNavigationDelegate, 
 
     func executeScript(_ script: String) {
         DispatchQueue.main.async {
-            self.webView.evaluateJavaScript(script) { (result, error) in
-                if result != nil { print(result as Any) }
-                if error != nil { print(error as Any) }
+            guard self.isReady else {
+                self.pendingScripts.append(script)
+                return
             }
+            self.evaluateReadyScript(script)
+        }
+    }
+
+    private func evaluateReadyScript(_ script: String) {
+        let wrappedScript = "(function() { \(script); return null; })()"
+        webView.evaluateJavaScript(wrappedScript) { _, error in
+            if let error {
+                NSLog("Terminal JavaScript error: %@", error.localizedDescription)
+            }
+        }
+    }
+
+    private func flushPendingScripts() {
+        let scripts = pendingScripts
+        pendingScripts.removeAll(keepingCapacity: true)
+        for script in scripts {
+            evaluateReadyScript(script)
         }
     }
 
@@ -395,6 +414,8 @@ class TerminalInstance: NSObject, WKScriptMessageHandler, WKNavigationDelegate, 
             guard executor != nil else {
                 fatalError("Executor has not been initialized")
             }
+            isReady = true
+            flushPendingScripts()
             self.readLine()
 
             if var lightTheme = ThemeManager.lightTheme {
@@ -404,7 +425,6 @@ class TerminalInstance: NSObject, WKScriptMessageHandler, WKNavigationDelegate, 
                 self.applyTheme(rawTheme: darkTheme.dictionary)
             }
             configureCustomOptions()
-            isReady = true
             syncTerminalSizeToServiceProvider()
             NotificationCenter.default.post(name: .terminalDidInitialize, object: self)
         case "window.size.change":
