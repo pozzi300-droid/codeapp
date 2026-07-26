@@ -10,7 +10,7 @@
 static MonoDomain *codeapp_domain;
 static pthread_mutex_t codeapp_mono_lock = PTHREAD_MUTEX_INITIALIZER;
 
-int codeapp_mono_exec(
+__attribute__((visibility("default"))) int codeapp_mono_exec(
     const char *assembly_search_path,
     const char *assembly_path,
     int argc,

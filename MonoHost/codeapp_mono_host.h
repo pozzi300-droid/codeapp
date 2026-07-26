@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-int codeapp_mono_exec(
+__attribute__((visibility("default"))) int codeapp_mono_exec(
     const char *assembly_search_path,
     const char *assembly_path,
     int argc,
