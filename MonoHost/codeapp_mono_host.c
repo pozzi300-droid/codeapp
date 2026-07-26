@@ -36,9 +36,11 @@ int codeapp_mono_exec(
     }
 
     MonoThread *thread = mono_thread_attach(codeapp_domain);
-    MonoAssembly *assembly = mono_domain_assembly_open(codeapp_domain, assembly_path);
+    MonoImageOpenStatus open_status = MONO_IMAGE_OK;
+    MonoAssembly *assembly = mono_assembly_open(assembly_path, &open_status);
     if (!assembly) {
-        fprintf(stderr, "Mono could not load managed assembly: %s\n", assembly_path);
+        fprintf(stderr, "Mono could not load managed assembly: %s (status %d)\n",
+                assembly_path, (int)open_status);
         if (thread) mono_thread_detach(thread);
         pthread_mutex_unlock(&codeapp_mono_lock);
         return 66;
