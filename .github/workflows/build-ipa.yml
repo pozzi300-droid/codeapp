@@ -88,9 +88,13 @@ jobs:
           test -f "$APP/MonoManaged/runtime/System.Private.CoreLib.dll"
           test -f "$APP/MonoManaged/tools/csc.dll"
           test -f "$APP/MonoManaged/ref/System.Runtime.dll"
-          find "$APP" -type d -name '*.appex' -print | grep -q .
-          nm -gU "$APP/Code" | grep -q '_codeapp_mono_exec$'
-          nm -gU "$APP/Code" | grep -q '_mono_jit_init$'
+          find "$APP" -type d -name '*.appex' -print > "$RUNNER_TEMP/embedded-extensions.txt"
+          test -s "$RUNNER_TEMP/embedded-extensions.txt"
+          nm -gU "$APP/Code" > "$RUNNER_TEMP/code-symbols.txt"
+          grep -q '_codeapp_mono_exec$' "$RUNNER_TEMP/code-symbols.txt"
+          grep -q '_mono_jit_init$' "$RUNNER_TEMP/code-symbols.txt"
+          echo "Embedded extensions:"
+          cat "$RUNNER_TEMP/embedded-extensions.txt"
           du -sh "$APP" "$APP/MonoManaged"
 
       - name: Package IPA
