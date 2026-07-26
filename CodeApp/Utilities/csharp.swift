@@ -9,26 +9,6 @@ import Foundation
 import Darwin
 import ios_system
 
-private let csharpStdoutKey = "CodeApp.CSharp.stdout"
-private let csharpStderrKey = "CodeApp.CSharp.stderr"
-
-func setCSharpCommandStreams(
-    stdout: UnsafeMutablePointer<FILE>?,
-    stderr: UnsafeMutablePointer<FILE>?
-) {
-    let dictionary = Thread.current.threadDictionary
-    if let stdout {
-        dictionary[csharpStdoutKey] = NSNumber(value: fileno(stdout))
-    } else {
-        dictionary.removeObject(forKey: csharpStdoutKey)
-    }
-    if let stderr {
-        dictionary[csharpStderrKey] = NSNumber(value: fileno(stderr))
-    } else {
-        dictionary.removeObject(forKey: csharpStderrKey)
-    }
-}
-
 @_cdecl("csc")
 public func csc(
     argc: Int32,
@@ -252,13 +232,13 @@ private final class CSharpRuntime {
     }
 
     private var outputFileDescriptor: Int32? {
-        if let stream = thread_stdout { return fileno(stream) }
-        return (Thread.current.threadDictionary[csharpStdoutKey] as? NSNumber)?.int32Value
+        guard let stream = ios_stdout() else { return nil }
+        return fileno(stream)
     }
 
     private var errorFileDescriptor: Int32? {
-        if let stream = thread_stderr { return fileno(stream) }
-        return (Thread.current.threadDictionary[csharpStderrKey] as? NSNumber)?.int32Value
+        guard let stream = ios_stderr() else { return nil }
+        return fileno(stream)
     }
 
     @discardableResult
