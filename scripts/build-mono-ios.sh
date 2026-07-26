@@ -36,6 +36,9 @@ download_nuget_package \
     "$ROSLYN_VERSION" \
     "$WORK_DIR/roslyn-pack"
 
+echo "All managed assemblies in the iOS Mono runtime pack:"
+find "$WORK_DIR/runtime-pack" -type f -name '*.dll' -print | sort
+
 NATIVE_DIR="$WORK_DIR/runtime-pack/runtimes/ios-arm64/native"
 if [[ ! -d "$NATIVE_DIR" ]]; then
     echo "Expected native runtime directory was not found: $NATIVE_DIR" >&2
