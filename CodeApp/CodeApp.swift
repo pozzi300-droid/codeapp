@@ -235,6 +235,10 @@ private func setupEnvironment() {
     replaceCommand("wasm", "wasm", true)
     replaceCommand("java", "java", true)
     replaceCommand("javac", "javac", true)
+    replaceCommand("csc", "csc", true)
+    replaceCommand("csrun", "csrun", true)
+    replaceCommand("csx", "csx", true)
+    replaceCommand("dotnet", "dotnet", true)
 
     joinMainThread = false
     numPythonInterpreters = 2

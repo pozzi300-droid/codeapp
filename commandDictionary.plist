@@ -655,28 +655,28 @@
 	</array>
 	<key>csc</key>
 	<array>
-		<string>Mono.framework/Mono</string>
+		<string>SELF</string>
 		<string>csc</string>
 		<string></string>
 		<string>file</string>
 	</array>
 	<key>csrun</key>
 	<array>
-		<string>Mono.framework/Mono</string>
+		<string>SELF</string>
 		<string>csrun</string>
 		<string></string>
 		<string>file</string>
 	</array>
 	<key>csx</key>
 	<array>
-		<string>Mono.framework/Mono</string>
+		<string>SELF</string>
 		<string>csx</string>
 		<string></string>
 		<string>file</string>
 	</array>
 	<key>dotnet</key>
 	<array>
-		<string>Mono.framework/Mono</string>
+		<string>SELF</string>
 		<string>dotnet</string>
 		<string></string>
 		<string>file</string>

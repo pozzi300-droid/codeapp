@@ -21,6 +21,11 @@ jobs:
           chmod +x downloadFrameworks.sh
           ./downloadFrameworks.sh
 
+      - name: Build verified Mono runtime and managed payload
+        run: |
+          chmod +x scripts/build-mono-ios.sh
+          scripts/build-mono-ios.sh
+
       - name: Nuclear patch (remove signing, extensions, previews)
         run: |
           rm -rf "CodeApp/Preview Content"
@@ -30,9 +35,6 @@ jobs:
           require 'xcodeproj'
           project = Xcodeproj::Project.open('Code.xcodeproj')
 
-          ext = project.targets.find { |t| t.name == 'extension' }
-          project.targets.delete(ext) if ext
-
           project.objects.each do |obj|
             if obj.respond_to?(:path) && obj.path && (obj.path.include?('Preview Content') || obj.path.include?('Preview Assets'))
                 obj.remove_from_project
@@ -40,14 +42,6 @@ jobs:
           end
 
           project.targets.each do |target|
-            target.dependencies.delete_if { |dep| dep.target && dep.target.name == 'extension' }
-
-            target.copy_files_build_phases.each do |phase|
-              phase.files.to_a.each do |bf|
-                phase.remove_build_file(bf) if bf.file_ref && bf.file_ref.path && bf.file_ref.path.end_with?('.appex')
-              end
-            end
-
             target.shell_script_build_phases.each do |phase|
               if phase.shell_script && phase.shell_script.include?('codesign')
                 phase.shell_script = "echo 'Codesign skipped successfully'"
@@ -86,6 +80,18 @@ jobs:
             ENABLE_PREVIEWS=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             BUILD_DIR="$(pwd)/build"
+
+      - name: Verify C# payload in built app
+        run: |
+          APP="$(find build/Release-iphoneos -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          test -n "$APP"
+          test -f "$APP/MonoManaged/runtime/System.Private.CoreLib.dll"
+          test -f "$APP/MonoManaged/tools/csc.dll"
+          test -f "$APP/MonoManaged/ref/System.Runtime.dll"
+          find "$APP" -type d -name '*.appex' -print | grep -q .
+          nm -gU "$APP/Code" | grep -q '_codeapp_mono_exec$'
+          nm -gU "$APP/Code" | grep -q '_mono_jit_init$'
+          du -sh "$APP" "$APP/MonoManaged"
 
       - name: Package IPA
         run: |

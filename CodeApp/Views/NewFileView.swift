@@ -108,6 +108,21 @@ struct NewFileView: View {
                 import Swift
                 print("Hello, World!")
                 """
+        case 6:
+            name = "Program.cs"
+            content = """
+                // Created on \(UIDevice.current.name).
+
+                using System;
+
+                class Program
+                {
+                    static void Main()
+                    {
+                        Console.WriteLine("Hello, World!");
+                    }
+                }
+                """
         case -2:
             name = "index.html"
             content = """
@@ -182,6 +197,7 @@ struct NewFileView: View {
         .init(code: 4, name: "PHP"),
         .init(code: 62, name: "Java"),
         .init(code: 83, name: "Swift"),
+        .init(code: 6, name: "C#"),
         .init(code: -2, name: "HTML"),
         .init(code: -3, name: "CSS"),
     ]

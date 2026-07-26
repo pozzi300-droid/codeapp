@@ -111,15 +111,6 @@ class BinaryExecutor {
                 JavaLauncher.shared.launchJava(args: args, frameworkDirectory: sharedFrameworksDirectory, currentDirectory: workingDirectory)
             case "node":
                 NodeLauncher.shared.launchNode(args: args)
-            case "csc", "csrun", "csx":
-                CSharpLauncher.shared.launchCSharp(args: args, currentDirectory: workingDirectory)
-            case "dotnet":
-                // Handle dotnet commands - check if it's a C# related command
-                if args.count > 1 && ["run", "build", "script"].contains(args[1]) {
-                    CSharpLauncher.shared.launchCSharp(args: args, currentDirectory: workingDirectory)
-                } else {
-                    SystemCommandLauncher.shared.launchSystemCommand(args: args, pythonLibraryDirectoryURL: pythonLibraryDirectory)
-                }
             default:
                 SystemCommandLauncher.shared.launchSystemCommand(args: args, pythonLibraryDirectoryURL: pythonLibraryDirectory)
             }

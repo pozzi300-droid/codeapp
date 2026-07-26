@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0C5A0010000000000000001 /* csharp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C5A0020000000000000001 /* csharp.swift */; };
+		D0C5A0030000000000000001 /* codeapp_mono_host.c in Sources */ = {isa = PBXBuildFile; fileRef = D0C5A0040000000000000001 /* codeapp_mono_host.c */; };
+		D0C5A0050000000000000001 /* MonoRuntime.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0C5A0060000000000000001 /* MonoRuntime.xcframework */; };
+		D0C5A0070000000000000001 /* MonoManaged in Resources */ = {isa = PBXBuildFile; fileRef = D0C5A0080000000000000001 /* MonoManaged */; };
 		940C68252C646E0400089EA3 /* System.swift in Sources */ = {isa = PBXBuildFile; fileRef = 940C68242C646E0400089EA3 /* System.swift */; };
 		940C68262C64704C00089EA3 /* String+toCString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 949B3CC425DEA89A00BC83B5 /* String+toCString.swift */; };
 		940C68272C65D36700089EA3 /* commandDictionary.plist in Resources */ = {isa = PBXBuildFile; fileRef = 948D11FF2583F20C008F877A /* commandDictionary.plist */; };
@@ -1406,6 +1410,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0C5A0020000000000000001 /* csharp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = csharp.swift; sourceTree = "<group>"; };
+		D0C5A0040000000000000001 /* codeapp_mono_host.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = codeapp_mono_host.c; sourceTree = "<group>"; };
+		D0C5A0090000000000000001 /* codeapp_mono_host.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = codeapp_mono_host.h; sourceTree = "<group>"; };
+		D0C5A0060000000000000001 /* MonoRuntime.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = MonoRuntime.xcframework; sourceTree = "<group>"; };
+		D0C5A0080000000000000001 /* MonoManaged */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MonoManaged; sourceTree = "<group>"; };
 		4F30816829662CBF002708FD /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		4F30816929662D58002708FD /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		73F80B0F2850F7E5000EF3FC /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -2101,6 +2110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C5A0050000000000000001 /* MonoRuntime.xcframework in Frameworks */,
 				947BBCDE2C12F5A600FFD0C5 /* TreeSitterPerlRunestone in Frameworks */,
 				947BBCF22C12F5A900FFD0C5 /* TreeSitterTOMLRunestone in Frameworks */,
 				948F174E26B91C2600B277FC /* FilesProvider in Frameworks */,
@@ -2173,6 +2183,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D0C5A00A0000000000000001 /* MonoHost */ = {
+			isa = PBXGroup;
+			children = (
+				D0C5A0040000000000000001 /* codeapp_mono_host.c */,
+				D0C5A0090000000000000001 /* codeapp_mono_host.h */,
+			);
+			path = MonoHost;
+			sourceTree = "<group>";
+		};
+		D0C5A00B0000000000000001 /* Mono */ = {
+			isa = PBXGroup;
+			children = (
+				D0C5A0060000000000000001 /* MonoRuntime.xcframework */,
+				D0C5A0080000000000000001 /* MonoManaged */,
+			);
+			path = Resources/Mono;
+			sourceTree = SOURCE_ROOT;
+		};
 		24509F1455D67D501EFBD28C /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -2230,6 +2258,8 @@
 		944EEBE72563C381009D77FE = {
 			isa = PBXGroup;
 			children = (
+				D0C5A00A0000000000000001 /* MonoHost */,
+				D0C5A00B0000000000000001 /* Mono */,
 				94F88FDA2C628AA800326AD0 /* FiraCode-Regular.ttf */,
 				94F88FDC2C628AB200326AD0 /* FiraCode-Regular.ttf */,
 				9434C3F12BA345A700EB1CF6 /* PrivacyInfo.xcprivacy */,
@@ -2432,6 +2462,7 @@
 		94A77799257ABC16008FE7B2 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				D0C5A0020000000000000001 /* csharp.swift */,
 				947313102BDFB7F9004A9960 /* Shared */,
 				949B3CC625DEAAA600BC83B5 /* node.swift */,
 				94CF58E0265E8A4B00CB6A4B /* wasm.swift */,
@@ -3526,6 +3557,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C5A0070000000000000001 /* MonoManaged in Resources */,
 				9424437F2C6F2DF100BC862F /* python-lsp in Resources */,
 				94127C40280335C8008C7F82 /* Themes in Resources */,
 				947515E52E7E886A00822B33 /* Iconv2.icon in Resources */,
@@ -3796,6 +3828,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C5A0010000000000000001 /* csharp.swift in Sources */,
+				D0C5A0030000000000000001 /* codeapp_mono_host.c in Sources */,
 				94A0462B2804A70C00182275 /* SourceControlUnsupportedSection.swift in Sources */,
 				94A777EF257B9193008FE7B2 /* GitHubSearchManager.swift in Sources */,
 				94A77820257BC5AA008FE7B2 /* MainScene.swift in Sources */,
@@ -4334,7 +4368,10 @@
 					"$(PROJECT_DIR)/Resources/cpython",
 					"$(PROJECT_DIR)/Resources/NodeJS",
 				);
-				HEADER_SEARCH_PATHS = "$(inherited)";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Resources/Mono/MonoRuntime.xcframework/ios-arm64/Headers",
+				);
 				INFOPLIST_FILE = CodeApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -4344,6 +4381,14 @@
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MARKETING_VERSION = 1.12.1;
 				OTHER_SWIFT_FLAGS = "-Xcc -Wno-incomplete-umbrella";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lz",
+					"-liconv",
+					"-lc++",
+					"-framework",
+					Security,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "thebaselab.VS-Code";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -4381,7 +4426,10 @@
 					"$(PROJECT_DIR)/Resources/NodeJS",
 				);
 				GCC_OPTIMIZATION_LEVEL = s;
-				HEADER_SEARCH_PATHS = "$(inherited)";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Resources/Mono/MonoRuntime.xcframework/ios-arm64/Headers",
+				);
 				INFOPLIST_FILE = CodeApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -4391,6 +4439,14 @@
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MARKETING_VERSION = 1.12.1;
 				OTHER_SWIFT_FLAGS = "-Xcc -Wno-incomplete-umbrella";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lz",
+					"-liconv",
+					"-lc++",
+					"-framework",
+					Security,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "thebaselab.VS-Code";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "match AppStore thebaselab.VS-Code";

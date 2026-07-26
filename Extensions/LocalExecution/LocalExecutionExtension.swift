@@ -19,6 +19,8 @@ private let LOCAL_EXECUTION_COMMANDS = [
         "javac {url}",
         "java -classpath \"{url_parent}\" \"{last_path_component_without_extension}\"",
     ],
+    "cs": ["csrun {url}"],
+    "csx": ["csrun {url}"],
 ]
 
 class LocalExecutionExtension: CodeAppExtension {

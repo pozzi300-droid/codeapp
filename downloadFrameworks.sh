@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # Clean previous downloads
 rm -rf Resources
 
@@ -93,13 +96,5 @@ rm -f monaco-textmate.bundle.zip
 curl -OL https://github.com/thebaselab/codeapp-java/releases/download/2024.8.16/java-lsp.zip
 unzip -q java-lsp.zip
 rm -f java-lsp.zip
-
-# Mono / C# Runtime
-mkdir -p Mono
-cd Mono
-curl -OL https://github.com/your-username/codeapp-csharp/releases/download/v1.0.0/Mono.xcframework.zip
-unzip -q Mono.xcframework.zip
-rm -f Mono.xcframework.zip
-cd ..
 
 echo "Done!"
