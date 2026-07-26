@@ -45,7 +45,9 @@ private func codeapp_mono_exec(
     _ assemblySearchPath: UnsafePointer<CChar>,
     _ assemblyPath: UnsafePointer<CChar>,
     _ argc: Int32,
-    _ argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+    _ argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?,
+    _ stdoutFileDescriptor: Int32,
+    _ stderrFileDescriptor: Int32
 ) -> Int32
 
 private final class CSharpRuntime {
@@ -111,7 +113,7 @@ private final class CSharpRuntime {
 
     private func dotnetCommand(_ args: [String], currentDirectory: URL) -> Int32 {
         guard let verb = args.first else {
-            fputs("Code App .NET host (offline Mono runtime)\nUsage: dotnet run [file.cs]\n", thread_stdout)
+            writeOutput("Code App .NET host (offline Mono runtime)\nUsage: dotnet run [file.cs]\n")
             return 0
         }
 
@@ -121,7 +123,7 @@ private final class CSharpRuntime {
         case "build":
             return compileCommand(Array(args.dropFirst()), currentDirectory: currentDirectory)
         case "--info", "--version":
-            fputs("Code App .NET 8 Mono host for iOS arm64\n", thread_stdout)
+            writeOutput("Code App .NET 8 Mono host for iOS arm64\n")
             return 0
         default:
             writeError("dotnet \(verb) is unavailable offline. Supported: run, build, --info.\n")
@@ -204,6 +206,12 @@ private final class CSharpRuntime {
         var cArguments = arguments.map { strdup($0) }
         defer { cArguments.forEach { free($0) } }
 
+        guard let output = thread_stdout, let errorOutput = thread_stderr else {
+            return 74
+        }
+        fflush(output)
+        fflush(errorOutput)
+
         return searchPath.withCString { searchPathPointer in
             assembly.path.withCString { assemblyPointer in
                 cArguments.withUnsafeMutableBufferPointer { buffer in
@@ -211,10 +219,17 @@ private final class CSharpRuntime {
                         searchPathPointer,
                         assemblyPointer,
                         Int32(buffer.count),
-                        buffer.baseAddress)
+                        buffer.baseAddress,
+                        fileno(output),
+                        fileno(errorOutput))
                 }
             }
         }
+    }
+
+    private func writeOutput(_ message: String) {
+        fputs(message, thread_stdout)
+        fflush(thread_stdout)
     }
 
     private func writeError(_ message: String) {

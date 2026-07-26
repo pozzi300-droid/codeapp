@@ -9,7 +9,9 @@ __attribute__((visibility("default"))) int codeapp_mono_exec(
     const char *assembly_search_path,
     const char *assembly_path,
     int argc,
-    char **argv);
+    char **argv,
+    int stdout_fd,
+    int stderr_fd);
 
 #ifdef __cplusplus
 }
