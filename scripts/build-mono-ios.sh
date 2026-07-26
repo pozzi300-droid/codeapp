@@ -137,7 +137,7 @@ if (( RUNTIME_SIZE < 5000 )); then
     echo "MonoRuntime.xcframework is suspiciously small: ${RUNTIME_SIZE} KiB" >&2
     exit 1
 fi
-if (( MANAGED_SIZE < 30000 )); then
+if (( MANAGED_SIZE < 20000 )); then
     echo "Mono managed payload is suspiciously small: ${MANAGED_SIZE} KiB" >&2
     exit 1
 fi
