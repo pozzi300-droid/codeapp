@@ -269,6 +269,15 @@ class Executor {
     private func run(command: String) -> Int32 {
         NSLog("Running command: \(command)")
 
+        if isCSharpCommandLine(command) {
+            let returnCode = launchCSharpCommandLine(
+                command,
+                stdout: stdout_file,
+                stderr: stdout_file)
+            NSLog("Direct C# command returned: %@ status=%d", command, returnCode)
+            return returnCode
+        }
+
         // ios_system requires these to be set to nil before command execution
         thread_stdin = nil
         thread_stdout = nil

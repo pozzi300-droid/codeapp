@@ -8,6 +8,56 @@
 import Foundation
 import ios_system
 
+func isCSharpCommandLine(_ commandLine: String) -> Bool {
+    guard let command = parseCSharpCommandLine(commandLine).first else { return false }
+    return ["csc", "csrun", "csx", "dotnet"].contains(command)
+}
+
+func launchCSharpCommandLine(
+    _ commandLine: String,
+    stdout: UnsafeMutablePointer<FILE>?,
+    stderr: UnsafeMutablePointer<FILE>?
+) -> Int32 {
+    CSharpRuntime.shared.launch(
+        arguments: parseCSharpCommandLine(commandLine),
+        outputFileDescriptor: stdout.map(fileno),
+        errorFileDescriptor: stderr.map(fileno))
+}
+
+private func parseCSharpCommandLine(_ commandLine: String) -> [String] {
+    var arguments: [String] = []
+    var current = ""
+    var quote: Character?
+    var escaping = false
+
+    for character in commandLine {
+        if escaping {
+            current.append(character)
+            escaping = false
+        } else if character == "\\" {
+            escaping = true
+        } else if let activeQuote = quote {
+            if character == activeQuote {
+                quote = nil
+            } else {
+                current.append(character)
+            }
+        } else if character == "\"" || character == "'" {
+            quote = character
+        } else if character.isWhitespace {
+            if !current.isEmpty {
+                arguments.append(current)
+                current = ""
+            }
+        } else {
+            current.append(character)
+        }
+    }
+    if escaping { current.append("\\") }
+    if !current.isEmpty { arguments.append(current) }
+    return arguments
+}
+
 @_cdecl("csc")
 public func csc(
     argc: Int32,
@@ -76,9 +126,20 @@ private final class CSharpRuntime {
         toolsDirectory.appendingPathComponent("csc.dll")
     }
 
-    func launch(arguments: [String]?) -> Int32 {
+    func launch(
+        arguments: [String]?,
+        outputFileDescriptor explicitOutputFD: Int32? = nil,
+        errorFileDescriptor explicitErrorFD: Int32? = nil
+    ) -> Int32 {
         lock.lock()
         defer { lock.unlock() }
+
+        activeOutputFD = explicitOutputFD ?? thread_stdout.map(fileno)
+        activeErrorFD = explicitErrorFD ?? thread_stderr.map(fileno)
+        defer {
+            activeOutputFD = nil
+            activeErrorFD = nil
+        }
 
         guard validateRuntime() else { return 127 }
         guard let arguments, let command = arguments.first else { return 64 }
@@ -231,32 +292,42 @@ private final class CSharpRuntime {
     }
 
     private var outputFileDescriptor: Int32? {
-        guard let stream = thread_stdout else { return nil }
-        return fileno(stream)
+        activeOutputFD
     }
 
     private var errorFileDescriptor: Int32? {
-        guard let stream = thread_stderr else { return nil }
-        return fileno(stream)
+        activeErrorFD
     }
+
+    private var activeOutputFD: Int32?
+    private var activeErrorFD: Int32?
 
     @discardableResult
     private func writeOutput(_ message: String) -> Bool {
-        guard let stream = thread_stdout else {
+        guard let fileDescriptor = outputFileDescriptor else {
             NSLog("C# stdout is unavailable: %@", message)
             return false
         }
-        fputs(message, stream)
-        fflush(stream)
-        return true
+        return write(message, to: fileDescriptor)
     }
 
     private func writeError(_ message: String) {
-        guard let stream = thread_stderr else {
+        guard let fileDescriptor = errorFileDescriptor else {
             NSLog("C# stderr is unavailable: %@", message)
             return
         }
-        fputs(message, stream)
-        fflush(stream)
+        _ = write(message, to: fileDescriptor)
+    }
+
+    private func write(_ message: String, to fileDescriptor: Int32) -> Bool {
+        guard fileDescriptor >= 0 else { return false }
+        do {
+            try FileHandle(fileDescriptor: fileDescriptor, closeOnDealloc: false)
+                .write(contentsOf: Data(message.utf8))
+            return true
+        } catch {
+            NSLog("C# terminal write failed: %@", error.localizedDescription)
+            return false
+        }
     }
 }
