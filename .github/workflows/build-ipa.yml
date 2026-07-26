@@ -99,8 +99,18 @@ jobs:
           }
 
           require_file "$APP/MonoManaged/runtime/System.Private.CoreLib.dll"
+          require_file "$APP/MonoManaged/runtime/System.Runtime.dll"
+          require_file "$APP/MonoManaged/runtime/System.Console.dll"
+          require_file "$APP/MonoManaged/runtime/System.Linq.dll"
+          require_file "$APP/MonoManaged/runtime/System.Collections.Immutable.dll"
+          require_file "$APP/MonoManaged/runtime/System.Reflection.Metadata.dll"
           require_file "$APP/MonoManaged/tools/csc.dll"
           require_file "$APP/MonoManaged/ref/System.Runtime.dll"
+          RUNTIME_DLL_COUNT="$(find "$APP/MonoManaged/runtime" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')"
+          if (( RUNTIME_DLL_COUNT < 160 )); then
+            echo "Built app has only $RUNTIME_DLL_COUNT executable runtime DLLs." >&2
+            exit 1
+          fi
           find "$APP" -type d -name '*.appex' -print > "$RUNNER_TEMP/embedded-extensions.txt"
           if [[ ! -s "$RUNNER_TEMP/embedded-extensions.txt" ]]; then
             echo "The App Extension is missing from the built app." >&2

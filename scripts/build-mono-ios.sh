@@ -36,9 +36,6 @@ download_nuget_package \
     "$ROSLYN_VERSION" \
     "$WORK_DIR/roslyn-pack"
 
-echo "All managed assemblies in the iOS Mono runtime pack:"
-find "$WORK_DIR/runtime-pack" -type f -name '*.dll' -print | sort
-
 NATIVE_DIR="$WORK_DIR/runtime-pack/runtimes/ios-arm64/native"
 if [[ ! -d "$NATIVE_DIR" ]]; then
     echo "Expected native runtime directory was not found: $NATIVE_DIR" >&2
@@ -110,9 +107,14 @@ if [[ -z "$CORELIB" ]]; then
     echo "System.Private.CoreLib.dll is absent from the iOS runtime pack." >&2
     exit 1
 fi
-RUNTIME_MANAGED_DIR="$(dirname "$CORELIB")"
+RUNTIME_MANAGED_DIR="$WORK_DIR/runtime-pack/runtimes/ios-arm64/lib/net8.0"
+if [[ ! -d "$RUNTIME_MANAGED_DIR" ]]; then
+    echo "The executable iOS BCL directory is missing: $RUNTIME_MANAGED_DIR" >&2
+    exit 1
+fi
 find "$RUNTIME_MANAGED_DIR" -maxdepth 1 -type f \( -name '*.dll' -o -name '*.json' \) \
     -exec cp {} "$OUTPUT_DIR/MonoManaged/runtime/" \;
+cp "$CORELIB" "$OUTPUT_DIR/MonoManaged/runtime/System.Private.CoreLib.dll"
 
 REFERENCE_DIR="$WORK_DIR/reference-pack/ref/net8.0"
 if [[ ! -f "$REFERENCE_DIR/System.Runtime.dll" ]]; then
@@ -131,8 +133,20 @@ find "$ROSLYN_DIR" -maxdepth 1 -type f \( -name '*.dll' -o -name '*.json' \) \
     -exec cp {} "$OUTPUT_DIR/MonoManaged/tools/" \;
 
 test -f "$OUTPUT_DIR/MonoManaged/runtime/System.Private.CoreLib.dll"
+test -f "$OUTPUT_DIR/MonoManaged/runtime/System.Runtime.dll"
+test -f "$OUTPUT_DIR/MonoManaged/runtime/System.Console.dll"
+test -f "$OUTPUT_DIR/MonoManaged/runtime/System.Linq.dll"
+test -f "$OUTPUT_DIR/MonoManaged/runtime/System.Collections.Immutable.dll"
+test -f "$OUTPUT_DIR/MonoManaged/runtime/System.Reflection.Metadata.dll"
 test -f "$OUTPUT_DIR/MonoManaged/ref/System.Runtime.dll"
 test -f "$OUTPUT_DIR/MonoManaged/tools/csc.dll"
+
+RUNTIME_ASSEMBLY_COUNT="$(find "$OUTPUT_DIR/MonoManaged/runtime" -maxdepth 1 -type f -name '*.dll' | wc -l | tr -d ' ')"
+if (( RUNTIME_ASSEMBLY_COUNT < 160 )); then
+    echo "Executable iOS BCL is incomplete: only $RUNTIME_ASSEMBLY_COUNT runtime DLLs." >&2
+    find "$OUTPUT_DIR/MonoManaged/runtime" -maxdepth 1 -type f -name '*.dll' -print | sort
+    exit 1
+fi
 
 RUNTIME_SIZE="$(du -sk "$OUTPUT_DIR/MonoRuntime.xcframework" | awk '{print $1}')"
 MANAGED_SIZE="$(du -sk "$OUTPUT_DIR/MonoManaged" | awk '{print $1}')"
@@ -147,6 +161,6 @@ fi
 
 echo "MonoRuntime.xcframework: ${RUNTIME_SIZE} KiB"
 echo "MonoManaged: ${MANAGED_SIZE} KiB"
-echo "Runtime assemblies: $(find "$OUTPUT_DIR/MonoManaged/runtime" -name '*.dll' | wc -l | tr -d ' ')"
+echo "Runtime assemblies: $RUNTIME_ASSEMBLY_COUNT"
 echo "Reference assemblies: $(find "$OUTPUT_DIR/MonoManaged/ref" -name '*.dll' | wc -l | tr -d ' ')"
 echo "Roslyn assemblies: $(find "$OUTPUT_DIR/MonoManaged/tools" -name '*.dll' | wc -l | tr -d ' ')"

@@ -101,6 +101,11 @@ private final class CSharpRuntime {
     private func validateRuntime() -> Bool {
         let required = [
             runtimeDirectory.appendingPathComponent("System.Private.CoreLib.dll"),
+            runtimeDirectory.appendingPathComponent("System.Runtime.dll"),
+            runtimeDirectory.appendingPathComponent("System.Console.dll"),
+            runtimeDirectory.appendingPathComponent("System.Linq.dll"),
+            runtimeDirectory.appendingPathComponent("System.Collections.Immutable.dll"),
+            runtimeDirectory.appendingPathComponent("System.Reflection.Metadata.dll"),
             compilerURL,
             referencesDirectory.appendingPathComponent("System.Runtime.dll"),
         ]
