@@ -9,6 +9,12 @@ import Foundation
 import Darwin
 import ios_system
 
+@_silgen_name("ios_stdout")
+private func codeapp_ios_stdout() -> UnsafeMutablePointer<FILE>?
+
+@_silgen_name("ios_stderr")
+private func codeapp_ios_stderr() -> UnsafeMutablePointer<FILE>?
+
 @_cdecl("csc")
 public func csc(
     argc: Int32,
@@ -232,12 +238,12 @@ private final class CSharpRuntime {
     }
 
     private var outputFileDescriptor: Int32? {
-        guard let stream = ios_stdout() else { return nil }
+        guard let stream = codeapp_ios_stdout() else { return nil }
         return fileno(stream)
     }
 
     private var errorFileDescriptor: Int32? {
-        guard let stream = ios_stderr() else { return nil }
+        guard let stream = codeapp_ios_stderr() else { return nil }
         return fileno(stream)
     }
 
