@@ -242,31 +242,21 @@ private final class CSharpRuntime {
 
     @discardableResult
     private func writeOutput(_ message: String) -> Bool {
-        guard let fileDescriptor = outputFileDescriptor else {
+        guard let stream = thread_stdout else {
             NSLog("C# stdout is unavailable: %@", message)
             return false
         }
-        return write(message, to: fileDescriptor)
+        fputs(message, stream)
+        fflush(stream)
+        return true
     }
 
     private func writeError(_ message: String) {
-        guard let fileDescriptor = errorFileDescriptor else {
+        guard let stream = thread_stderr else {
             NSLog("C# stderr is unavailable: %@", message)
             return
         }
-        _ = write(message, to: fileDescriptor)
-    }
-
-    private func write(_ message: String, to fileDescriptor: Int32) -> Bool {
-        guard fileDescriptor >= 0 else { return false }
-        let data = Data(message.utf8)
-        do {
-            try FileHandle(fileDescriptor: fileDescriptor, closeOnDealloc: false)
-                .write(contentsOf: data)
-            return true
-        } catch {
-            NSLog("C# terminal write failed: %@", error.localizedDescription)
-            return false
-        }
+        fputs(message, stream)
+        fflush(stream)
     }
 }

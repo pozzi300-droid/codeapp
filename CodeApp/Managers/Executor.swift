@@ -28,6 +28,7 @@ class Executor {
     private var requestInput: ((_ prompt: String) -> Void)
     private var lastCommand: String? = nil
     private var stdout_active = false
+    private var stdoutDrainSemaphore = DispatchSemaphore(value: 0)
     private let END_OF_TRANSMISSION = "\u{04}"
 
     var currentWorkingDirectory: URL
@@ -124,10 +125,13 @@ class Executor {
     }
 
     private func _onStdout(data: Data) {
-        let str = String(decoding: data, as: UTF8.self)
-
+        var str = String(decoding: data, as: UTF8.self)
         if str.contains(END_OF_TRANSMISSION) {
+            str = str.replacingOccurrences(of: END_OF_TRANSMISSION, with: "")
             stdout_active = false
+            stdoutDrainSemaphore.signal()
+        }
+        guard !str.isEmpty, let remainingData = str.data(using: .utf8) else {
             return
         }
 
@@ -135,7 +139,7 @@ class Executor {
             if self.state == .running {
                 // Interactive Commands /with control characters
                 if str.contains("\u{8}") || str.contains("\u{13}") || str.contains("\r") {
-                    self.receivedStdout(data)
+                    self.receivedStdout(remainingData)
                     return
                 }
                 self.requestInput(str)
@@ -143,7 +147,7 @@ class Executor {
                     self.prompt = prom
                 }
             } else {
-                self.receivedStdout(data)
+                self.receivedStdout(remainingData)
             }
         }
     }
@@ -195,6 +199,7 @@ class Executor {
         stdout_pipe.fileHandleForReading.readabilityHandler = self.onStdout
 
         stdout_active = true
+        stdoutDrainSemaphore = DispatchSemaphore(value: 0)
 
         let queue = DispatchQueue(label: "\(command)", qos: .utility)
 
@@ -214,6 +219,7 @@ class Executor {
             ios_setStreams(self.stdin_file, self.stdout_file, self.stdout_file)
 
             let code = self.run(command: command)
+            NSLog("Command returned from ios_system: %@ status=%d", command, code)
 
             close(stdin_pipe.fileHandleForReading.fileDescriptor)
             self.stdin_file_input = nil
@@ -222,9 +228,13 @@ class Executor {
             let writeOpen = fcntl(stdout_pipe.fileHandleForWriting.fileDescriptor, F_GETFD)
             if writeOpen >= 0 {
                 // Pipe is still open, send information to close it, once all output has been processed.
+                if let stream = self.stdout_file {
+                    fflush(stream)
+                }
                 stdout_pipe.fileHandleForWriting.write(self.END_OF_TRANSMISSION.data(using: .utf8)!)
-                while self.stdout_active {
-                    fflush(thread_stdout)
+                if self.stdoutDrainSemaphore.wait(timeout: .now() + 2) == .timedOut {
+                    NSLog("Timed out draining terminal output for command: %@", command)
+                    self.stdout_active = false
                 }
             }
 
